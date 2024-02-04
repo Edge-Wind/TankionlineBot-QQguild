@@ -31,15 +31,62 @@ test_config = read(os.path.join(os.path.dirname(__file__), "config.yaml"))
 _log = logging.get_logger()
 columns = ['区服',"ID", "等级", "经验比", "战力GS", "击杀",'阵亡','KD','获得水晶数','获得金箱子','本周战斗水晶排名','本周战斗水晶数量','本周效率排名','本周效率','本周金水晶排名','本周金水晶数量','本周经验排名','本周经验','道具使用总量','道具使用详情','核能', '维修工具', '护甲提升', '伤害提升', '速度提升', '地雷', '金箱子', 'Grenade','战斗经验','战斗时间(小时)','time','原ID']
 df_1 = pd.DataFrame(columns=columns)
-print(len(columns))
+
 # 将空的 DataFrame 写入 CSV 文件
 df_1.to_csv('player_data.csv', mode="a",index=False)
+
+columns_online=['时间','服务器','状态','战斗中','国服在线','4399在线']
+df_online=pd.DataFrame(columns=columns_online)
+'''df_online.to_csv('onlinedata.csv',  mode='a', index=False)'''
 
 class MyClient(botpy.Client):
     async def on_ready(self):
         _log.info(f"robot 「{self.robot.name}」 on_ready!")
+        await self.get_online_data()
 
-        await self.schedule_message()
+    async def get_online_data(self):
+        i = 0
+        while True:
+            i += 1
+            current_timestamp = int(time.time())
+            current_time = time.localtime(current_timestamp)
+            next_hour_timestamp = current_timestamp - (current_time.tm_sec) + 600
+            # print(current_time.tm_hour * 3600 + current_time.tm_min * 60 + current_time.tm_sec)
+            wait_time = next_hour_timestamp - current_timestamp
+            await asyncio.sleep(wait_time)
+            rnd = str(int(random.randrange(10000, 99999)))
+            url_online = "https://3dtank.com/s/status.js?rnd=" + rnd
+            try:
+
+                response_online = requests.get(url=url_online)
+                json_data_online = json.loads(response_online.text)
+
+                # pprint.pprint(json_data_online)
+                inbattles = 0
+                online = 0
+                online_49 = 0
+                server_host = ""
+                for server in json_data_online["nodes"]:
+                    server_host_a = json_data_online['nodes'][server]['endpoint']['host']
+                    server_status = json_data_online['nodes'][server]['endpoint']['status']
+                    inbattles_a = json_data_online["nodes"][server]["inbattles"]
+                    online_a = json_data_online["nodes"][server]["online"]
+                    online_49_a = json_data_online["nodes"][server]["partners"]["my_4399_com"]
+                    inbattles += inbattles_a
+                    online += online_a
+                    online_49 += online_49_a
+                    server_host += server_host_a
+
+            except Exception:
+                print('online_error')
+                continue
+
+            data = [next_hour_timestamp, server_host, server_status, inbattles, online, online_49]
+            df_online = pd.DataFrame([data], columns=columns_online)
+            print(i)
+
+            df_online.to_csv('onlinedata.csv', header=False, mode='a', index=False)
+        '''await self.schedule_message()
 
     async def schedule_message(self):
         channel_id = 543637697
@@ -56,11 +103,11 @@ class MyClient(botpy.Client):
                     "url": "https://en.tankiwiki.com/images/en/f/f6/Trophy_Augment_Shaft.png"
                 },
                 fields=[
-                    EmbedField(name="心想事成，梦想成真，愿你在2024年里收获满满"),
-                    EmbedField(name="祝坦P们新的一年里开箱出红、基金中币、跳棋避坑！"),
+                    EmbedField(name="1"),
+                    EmbedField(name="1"),
                 ],
             )
-            await self.api.post_message(channel_id=channel_id, embed=embed)
+            await self.api.post_message(channel_id=channel_id, embed=embed)'''
     async def on_at_message_create(self, message: Message):
         _log.info(message.author.avatar)
         if "sleep" in message.content:
@@ -71,23 +118,25 @@ class MyClient(botpy.Client):
         try:
             times_1=time.time()
             if message.content[0:29]=="<@!15425887405726406995> /国服 ":
+                names=message.content[29:]
+                url = 'https://ratings.3dtank.com/get_stat/profile/?user=' + names + '&lang=cn'
+            elif message.content[0:29] == "<@!15425887405726406995> /外服 ":
+                names = message.content[29:]
+                url = "https://ratings.tankionline.com/api/eu/profile/?user=" + names + "&lang=cn"
 
+            if message.content[0:29]=="<@!15425887405726406995> /国服 " or message.content[0:29] == "<@!15425887405726406995> /外服 ":
                 start_time = time.time()
                 names = message.content[29:]
-
                 result_queue = queue.Queue()
-
-                def get_json(names):
-                    url = 'https://ratings.3dtank.com/get_stat/profile/?user=' + names + '&lang=cn'
+                def get_json(url,names):
                     header = {
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"}
-
                     response = requests.get(url=url, headers=header)
                     # json_data_ra=json.dumps(response.text)
                     json_data = json.loads(response.text)
                     return json_data
 
-                json_data = get_json(names)
+                json_data = get_json(url,names)
 
                 def get_basic_data(json_data, result_queue):  # 此部分为简单的索引语句
                     name = re.sub(r"\.","。",json_data['response']['name'])
@@ -239,7 +288,7 @@ class MyClient(botpy.Client):
                         await message.reply(content="未查询到数据，可能开启隐藏数据或输入不正确")
                 else:
                     await message.reply(content="请输入ID")
-
+    
                 '''
                 if message.guild_id!="16488793382617768689":
                     if json_data["responseType"] == "OK":
@@ -249,184 +298,6 @@ class MyClient(botpy.Client):
                 else:
                     await message.reply(content="本频道无法使用该机器人，请加主频道1xsqbm99k4并联系频道主testanki")
                     await message.reply(file_image="JS.jpg")
-
-
-            if message.content[0:29] == "<@!15425887405726406995> /外服 ":
-                #print(message)
-                start_time = time.time()
-                names = message.content[29:]
-
-                result_queue = queue.Queue()
-
-                def get_json(names):
-                    header = {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'}  # 设置请求头，反爬措施
-
-                    url = "https://ratings.tankionline.com/api/eu/profile/?user=" + names + "&lang=cn"
-
-                    response = requests.get(url=url, headers=header)
-                    # json_data_ra=json.dumps(response.text)
-                    json_data = json.loads(response.text)
-                    return json_data
-                json_data=get_json(names)
-                def get_basic_data(json_data, result_queue):  # 此部分为简单的索引语句
-                    name = re.sub(r"\.","。",json_data['response']['name'])
-                    if json_data["response"]["hasPremium"] == True:
-                        name = "[VIP] " + name
-                    rank = json_data['response']['rank']
-                    rank_true = rank - 1
-                    to_rank_list = ['新兵', '二等兵', '一等兵', '下士', '中士', '上士',
-                                    '三级军士长', '二级军士长', '一级军士长', '军士长',
-                                    '五级准尉',
-                                    '四级准尉', '三级准尉', '二级准尉', '一级准尉',
-                                    '特级准尉', '少尉', '中尉', '上尉', '少校',
-                                    '中校', '上校', '准将', '少将', '中将',
-                                    '上将', '元帅', '陆军元帅', '统帅', '大元帅']
-
-                    if rank_true <= 29:
-                        rank_name = to_rank_list[rank_true]
-
-                    else:
-                        rank_name = "传奇" + str(rank_true - 29)
-
-                    score = json_data['response']['score']
-                    score_base = json_data['response']['scoreBase']
-                    score_next = json_data['response']['scoreNext']
-                    score_0n = str(score) + '/' + str(score_next)
-                    gearscore = json_data['response']['gearScore']
-                    kills = json_data['response']['kills']
-                    deaths = json_data['response']['deaths']
-                    if deaths != 0:
-                        k_d = kills / deaths
-                    else:
-                        k_d = kills
-
-                    earnedCrystals = json_data['response']['earnedCrystals']
-                    caughtGolds = json_data['response']['caughtGolds']
-                    battle_crystals_position = json_data["response"]["rating"]["crystals"]["position"]
-                    battle_crystals_value = json_data["response"]["rating"]["crystals"]["value"]
-                    battle_efficiency_position = json_data["response"]["rating"]["efficiency"]["position"]
-                    battle_efficiency_value = json_data["response"]["rating"]["efficiency"]["value"]
-                    battle_golds_position = json_data["response"]["rating"]["golds"]["position"]
-                    battle_golds_value = json_data["response"]["rating"]["golds"]["value"]
-                    battle_score_position = json_data["response"]["rating"]["score"]["position"]
-                    battle_score_value = json_data["response"]["rating"]["score"]["value"]
-
-                    basic_data = 'ID:'+name + '\n' + '等级:' + rank_name + '\n' + '经验比:' + score_0n + '\n' + '战力GS:' + str( \
-                        gearscore) + '\n' + '击杀:' + str( \
-                        kills) + '\n' + '阵亡:' + str(deaths) + '\n' + 'KD:' + str(k_d) + '\n' + '获得水晶数:' + str( \
-                        earnedCrystals) + '\n' + '获得金箱子:' + str(caughtGolds) + '\n' + "\t本周战斗水晶排名:" + str( \
-                        battle_crystals_position) + '\n' + "\t本周战斗水晶数量:" + str( \
-                        battle_crystals_value) + '\n' + '\t本周效率排名:' + str( \
-                        battle_efficiency_position) + '\n' + '\t本周效率:' + str( \
-                        battle_efficiency_value) + '\n' + '\t本周金水晶排名:' + str( \
-                        battle_golds_position) + '\n' + '\t本周金水晶数量:' + str( \
-                        battle_golds_value) + '\n' + '\t本周经验排名:' + str( \
-                        battle_score_position) + '\n' + '\t本周经验:' + str( \
-                        battle_score_value)
-                    result_queue.put(basic_data)
-
-                def get_supplies_data(json_data, result_queue):  # 此函数用于获取道具使用情况
-                    sum_1 = 0
-                    supplies_string = ""
-                    for i in range(len(json_data['response']['suppliesUsage'])):
-                        supplies_element_usage = json_data['response']['suppliesUsage'][i]['usages']
-                        supplies_element_name = json_data['response']['suppliesUsage'][i]['name']
-                        if i < 7:
-                            n_u = '\t' + supplies_element_name + ":" + str(supplies_element_usage) + '\n'
-                        else:
-                            n_u = '\t' + supplies_element_name + ":" + str(supplies_element_usage)
-                        supplies_string += n_u
-                        sum_1 += supplies_element_usage
-
-                    supplies_data = "\n" + "道具使用总量:" + str(
-                        sum_1) + '\n' + "道具使用详情:" + "\n" + supplies_string
-                    result_queue.put(supplies_data)
-
-                def get_sum_data(json_data, result_queue):
-                    sum_score = 0
-                    sum_time = 0
-                    for i in range(len(json_data['response']["modesPlayed"])):
-                        score_mode = json_data['response']["modesPlayed"][i]["scoreEarned"]
-                        sum_score += score_mode
-                        time_mode = json_data['response']["modesPlayed"][i]["timePlayed"]
-                        sum_time += time_mode
-                    sum_data = "\n" + "战斗经验:" + str(sum_score) + "\n" + "匹配游戏时间(小时):" + str(
-                        sum_time / 3600000)
-                    result_queue.put(sum_data)
-
-                def main(json_data):
-
-
-                    thread_basic_data = threading.Thread(target=get_basic_data, name="thread_basic_data",
-                                                         args=(json_data, result_queue))
-                    thread_supplies_data = threading.Thread(target=get_supplies_data, name="thread_supplies_data",
-                                                            args=(json_data, result_queue))
-                    thread_sum_data = threading.Thread(target=get_sum_data, name="thread_sum_data",
-                                                       args=(json_data, result_queue))
-
-                    thread_basic_data.start()
-                    thread_supplies_data.start()
-                    thread_sum_data.start()
-                    thread_sum_data.join()
-                    thread_basic_data.join()
-                    thread_supplies_data.join()
-
-                    results = []
-                    while not result_queue.empty():
-                        result = result_queue.get()
-                        results.append(result)
-
-                    # 输出各个线程的返回值
-                    user_data = " ".join(results)
-                    end_time = time.time()
-                    t = end_time - start_time
-                    player_data = OrderedDict()
-                    current_key = None
-
-                    for line in ("区服:"+'外服'+'\n'+user_data + '\n' + 'time:' + str(times_1)+ '\n' +'原ID:'+names.lower()).strip().split('\n'):
-                        if ':' in line:
-                            current_key, value = line.split(':', 1)
-                            player_data[current_key] = value.strip()
-                        elif current_key == '道具使用详情':
-                            # 处理道具使用详情部分，使用列表保存多个道具使用详情
-                            current_key = current_key.strip()  # 移除前导空格
-                            sub_key, sub_value = line.split(':', 1)
-                            player_data.setdefault(current_key, []).append({sub_key.strip(): sub_value.strip()})
-
-                    # 创建 DataFrame
-                    df = pd.DataFrame([player_data])
-                    columns_correct = ['区服',"ID", "等级", "经验比", "战力GS", "击杀", '阵亡', 'KD', '获得水晶数',
-                                       '获得金箱子', '\t本周战斗水晶排名', '\t本周战斗水晶数量', '\t本周效率排名',
-                                       '\t本周效率',
-                                       '\t本周金水晶排名', '\t本周金水晶数量', '\t本周经验排名', '\t本周经验',
-                                       '道具使用总量',
-                                       '道具使用详情', '\t核能', '\t维修工具', '\t护甲提升', '\t伤害提升',
-                                       '\t速度提升', '\t地雷', '\t金箱子', '\tGrenade', '战斗经验',
-                                       '匹配游戏时间(小时)', 'time','原ID']
-                    # 保存 DataFrame 为 CSV 文件
-                    df = df[columns_correct]
-                    df.to_csv('player_data.csv', header=False, mode='a', index=False)
-                    return user_data + "\n" + "处理时间:"+str(t) + "秒"
-
-                '''
-                if names != "":
-                    if json_data["responseType"] == "OK":
-                        await message.reply(content=main(json_data))
-                    else:
-                        await message.reply(content="未查询到数据，可能开启隐藏数据或输入不正确")
-                else:
-                    await message.reply(content="请输入ID")
-                '''
-                if message.guild_id!="16488793382617768689":
-                    if json_data["responseType"] == "OK":
-                        await message.reply(content=main(json_data))
-                    else:
-                        await message.reply(content="未查询到数据，可能开启隐藏数据或输入不正确")
-                else:
-                    await message.reply(content="本频道无法使用该机器人，请加主频道1xsqbm99k4并联系频道主testanki")
-                    await message.reply(file_image="JS.jpg")
-                
 
 
 
@@ -500,10 +371,7 @@ class MyClient(botpy.Client):
 
         try:
             if message.content[0:32]=="<@!15425887405726406995> /国服在线人数":
-                rnd = str(int(random.randrange(10000, 99999)))
-                url_5 = "https://3dtank.com/s/status.js?rnd=" + rnd
-                response_5 = requests.get(url=url_5)
-                json_data_5 = json.loads(response_5.text)
+
                 #pprint.pprint(json_data_5)
                 rnd = str(int(random.randrange(10000, 99999)))
                 url_5 = "https://3dtank.com/s/status.js?rnd=" + rnd
@@ -591,37 +459,28 @@ class MyClient(botpy.Client):
             if message.content[0:29] == "<@!15425887405726406995> /天气 ":
                 respones_province_url = ''
                 province_in = re.findall('<@!15425887405726406995> /天气 (.*?)#', message.content, re.S)
-                # print(province_in)
                 url_all_province = "http://www.nmc.cn/rest/province/all"
                 header = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"}
                 respones_province = requests.get(url=url_all_province, headers=header)
-                # pprint.pprint(respones_povince.text)
                 respones_province_code = re.findall('name":"(.*?)","url', respones_province.text, re.S)
-                # print(respones_province_code)
 
                 for i in range(len(respones_province_code)):
                     if province_in[0] == respones_province_code[i]:
                         respones_province_url = re.findall('url":"(.*?)"}', respones_province.text, re.S)[i]
-                        # print(respones_province_url)
-                # print(respones_povince_code[i])
 
                 url_city = "http://www.nmc.cn/rest/province/" + \
                            re.findall('/publish/forecast/(.*?).html', respones_province_url, re.S)[0]
                 print(url_city)
                 response_city = requests.get(url=url_city, headers=header)
-                # print(response_city.text)
 
-                # city_in = input("请输入城市")
                 city_in = re.findall('#(.*?)#', message.content, re.S)
-                # print(city_in)
                 response_city_name = re.findall('city":"(.*?)","url', response_city.text, re.S)
                 p = Pinyin()
                 city_pinyin_li = p.get_pinyin(city_in[0]).split("-")
                 city_pinyin = ""
                 for i in range(len(city_pinyin_li)):
                     city_pinyin = city_pinyin + city_pinyin_li[i]
-                # print(city_pinyin)
                 url = 'http://www.nmc.cn/publish/forecast/' + \
                       re.findall('/publish/forecast/(.*?).html', respones_province_url, re.S)[
                           0] + '/' + city_pinyin + '.html'
@@ -674,81 +533,17 @@ class MyClient(botpy.Client):
         except Exception:
             print("天气错误")
 
-        try:
-            if message.content[0:31] == "<@!15425887405726406995> /外服装备 ":
-                names = message.content[31:]
-                url = "https://ratings.tankionline.com/api/eu/profile/?user="+names+"&lang=cn"
-                header = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'}
-                response = requests.get(url=url, headers=header)
-
-                json_data = json.loads(response.text)
-                #pprint.pprint(json_data)
-                if json_data["responseType"] == "OK":
-                    name = re.sub(r"\.","。",json_data['response']['name'])
-                    if json_data["response"]["hasPremium"] == True:
-                        name = "[VIP] " + name
-                    rank = json_data['response']['rank']
-                    rank_true = rank - 1
-                    to_rank_list = ['新兵', '二等兵', '一等兵', '下士', '中士', '上士',
-                                    '三级军士长', '二级军士长', '一级军士长', '军士长',
-                                    '五级准尉',
-                                    '四级准尉', '三级准尉', '二级准尉', '一级准尉',
-                                    '特级准尉', '少尉', '中尉', '上尉', '少校',
-                                    '中校', '上校', '准将', '少将', '中将',
-                                    '上将', '元帅', '陆军元帅', '统帅', '大元帅']
-                    gearscore = json_data['response']['gearScore']
-                    if rank_true <= 29:
-                        rank_name = to_rank_list[rank_true]
-
-                    else:
-                        rank_name = "传奇" + str(rank_true - 29)
-
-                    def equipment(json_data, mod, index):
-                        turret_msg_list = []
-                        t = ""
-                        for i in range(len(json_data["response"][mod])):
-                            turret_name = json_data["response"][mod][i]["name"]
-                            turret_id_list = []
-                            for j in range(len(json_data["response"][mod])):
-                                if json_data["response"][mod][j]["name"] == turret_name:
-                                    turret_id = json_data["response"][mod][j]["grade"]
-                                    turret_id_list.append(turret_id)
-                            turret_grade = max(turret_id_list)
-                            if index == 1:
-                                turret_data = turret_name + ':' + str(turret_grade + 1)+' '
-                            else:
-                                turret_data = turret_name + ':' + "Nan"+' '
-                            if turret_data in turret_msg_list:
-                                continue
-                            turret_msg_list.append(turret_data)
-                        return turret_msg_list
-
-            # print(turret_msg_list)
-                    turret = equipment(json_data=json_data, mod='turretsPlayed', index=1)
-                    hull = equipment(json_data=json_data, mod='hullsPlayed', index=1)
-                    drone = equipment(json_data=json_data, mod='dronesPlayed', index=0)
-                    module = equipment(json_data=json_data, mod='resistanceModules', index=0)
-                    datas = (name+'\n'+"等级："+rank_name+'\n'+'战力GS：' + str(gearscore) + '\n' + "-------炮塔-------" + '\n' + ','.join(turret) + '\n' + "-------底盘-------" + '\n' + ','.join(
-                            hull) + '\n' + '-------无人机-------' + '\n' + ','.join(drone) + '\n' + '-------模块-------' + '\n' + ','.join(module))
-                    if message.guild_id != "16488793382617768689":
-                        await message.reply(content=datas)
-                    else:
-                        await message.reply(content="本频道无法使用该机器人，请加主频道1xsqbm99k4并联系频道主testanki")
-                        await message.reply(file_image="JS.jpg")
-                    '''await message.reply(content=datas)'''
-                else:
-                    await message.reply(content="未查询到数据，可能开启隐藏数据或输入不正确")
-
-        except Exception:
-            await message.reply(content="机器人工作异常/网站连接异常/频道拦截消息")
-
 
         try:
             if message.content[0:31] == "<@!15425887405726406995> /国服装备 ":
-
                 names = message.content[31:]
                 url = 'https://ratings.3dtank.com/get_stat/profile/?user=' + names + '&lang=cn'
+            elif message.content[0:31] == "<@!15425887405726406995> /外服装备 ":
+                names = message.content[31:]
+                url = "https://ratings.tankionline.com/api/eu/profile/?user=" + names + "&lang=cn"
+
+            if message.content[0:31] == "<@!15425887405726406995> /国服装备 " or message.content[0:31] == "<@!15425887405726406995> /外服装备 ":
+
                 header = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'}
                 response = requests.get(url=url, headers=header)
@@ -795,7 +590,7 @@ class MyClient(botpy.Client):
                             turret_msg_list.append(turret_data)
                         return turret_msg_list
 
-            # print(turret_msg_list)
+
                     turret = equipment(json_data=json_data, mod='turretsPlayed', index=1)
                     hull = equipment(json_data=json_data, mod='hullsPlayed', index=1)
                     drone = equipment(json_data=json_data, mod='dronesPlayed', index=0)
@@ -822,6 +617,69 @@ class MyClient(botpy.Client):
                 await message.reply(content=fact)
         except Exception:
             print("失败")
+
+        try:
+            if message.content[0:29] == '<@!15425887405726406995> 近期在线':
+
+                df = pd.read_csv('onlinedata.csv', encoding='gbk')
+                time_stamp = df['时间'].tolist()[-135:]
+
+                inbattle = df['战斗中'].tolist()[-135:]
+                online = df['国服在线'].tolist()[-135:]
+                online_4399 = df['4399在线'].tolist()[-135:]
+
+                time_true_list = []
+                for j in range(len(time_stamp)):
+                    day = str(time.localtime(time_stamp[j]).tm_mday)
+                    hour = str(time.localtime(time_stamp[j]).tm_hour)
+                    minute = str(time.localtime(time_stamp[j]).tm_min)
+                    time_true = day + '日' + hour + '时' + minute + '分'
+                    time_true_list.append(time_true)
+
+                inbattle_online_list = []
+                for i in range(len(online)):
+                    inbattle_online = inbattle[i] / online[i]
+                    inbattle_online_list.append(inbattle_online)
+
+                fig, ax1 = plt.subplots(figsize=(2560 / 80, 1440 / 80), dpi=80)
+                plt.rcParams['font.sans-serif'] = ['SimHei']  # SimHei 是支持中文的字体，你可以根据需要选择其他字体
+                plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+                plt.title('国服在线人数情况')
+
+                color = 'tab:blue'
+                ax1.set_xlabel('时间')
+                ax1.set_ylabel('战斗中', color=color)
+                ax1.set_ylabel('人数')
+                xticks = plt.xticks(np.arange(0, len(time_true_list), 1), rotation=90, ha="right")
+                yticks = ax1.set_yticks(np.arange(0, max(online) + 10, 10))
+                ax1.set_xlim(0, len(time_true_list) - 2)
+                ax1.set_ylim(0, max(online) + 10)
+                ax1.grid(True, linestyle='--', alpha=0.7)
+                line_inbattle = ax1.plot(time_true_list, inbattle, marker='+', linestyle='-', color='b', label='战斗中')
+                line_online = ax1.plot(time_true_list, online, marker='.', linestyle='-.', color='y', label='游戏在线')
+                line_online4399 = ax1.plot(time_true_list, online_4399, marker='*', linestyle=':', color='g',
+                                           label='4399在线')
+                ax1.legend(loc='upper right')
+
+                ax2 = ax1.twinx()
+                color = 'tab:red'
+                ax2.set_ylabel('战斗中与在线比例', color=color)
+                ax2.set_yticks(np.arange(0, 1, 0.01))
+                ax2.set_ylim(0, 1)
+                line_scale = ax2.plot(time_true_list, inbattle_online_list, marker='d', linestyle='--', color=color,
+                                      label='战斗中占比')
+                ax2.tick_params(axis='y', labelcolor=color)
+
+                lines, labels = ax1.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax1.legend(lines + lines2, labels + labels2, loc='upper right')
+
+                # 显示图表
+                plt.tight_layout()  # 防止标签被截断
+                plt.savefig('my_plot.png')
+                await message.reply(file_image="my_plot.png")
+        except Exception:
+            await message.reply(content="机器人工作异常/频道拦截消息")
 
 
 '''        #try:
