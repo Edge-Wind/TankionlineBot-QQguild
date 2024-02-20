@@ -619,6 +619,65 @@ class MyClient(botpy.Client):
             print("失败")
 
         try:
+            if message.content[0:29] == '<@!15425887405726406995> 装备升级':
+                equip_name=message.content[29:]
+                headers = {
+                    "authority": "en.tankiwiki.com",
+                    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+                    "cache-control": "no-cache",
+                    "pragma": "no-cache",
+                    "sec-ch-ua": 'Not A(Brand";v="99", "Microsoft Edge";v="121,Chromium";v="121',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": "Windows",
+                    "sec-fetch-dest": "document",
+                    "sec-fetch-mode": "navigate",
+                    "sec-fetch-site": "none",
+                    "sec-fetch-user": "?1",
+                    "upgrade-insecure-requests": "1",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+                }
+                cookies = {
+                    "_ym_uid": "1702000361954175054",
+                    "_ym_d": "1702000361",
+                    "_ym_isad": "1",
+                    "TCK2": "9a1bb93cb19384b86f5f4069e7266a9a"
+                    # 和梯子节点有关#9a1bb93cb19384b86f5f4069e7266a9a#c1b0e3c901feaae99986951e2064f3aa
+                }
+                url = "https://en.tankiwiki.com/Micro-upgrades_"+equip_name
+                response = requests.get(url, headers=headers, cookies=cookies)
+
+                print(response)
+                if response.status_code==200:
+                    htmldata = etree.HTML(response.text)
+                    micro_upgrade = ''
+                    for mk_rank in range(2,9):  # //*[@id="mw-content-text"]/div[1]/table[8]/tbody/tr/td[2]/ul/li[1]/text()[1]
+                        i = 0
+                        grade = 'MK' + str(mk_rank - 1) + '→MK' + str(mk_rank) + '\n'
+                        micro_upgrade += grade
+                        per_grade = ''
+                        while True:
+                            i += 1
+                            damage_list = htmldata.xpath(
+                                '//*[@id="mw-content-text"]/div[1]/table[' + str(mk_rank) + ']/tbody/tr/td[2]/ul/li[' + str(
+                                    i) + ']/text()[1]') + htmldata.xpath(
+                                '//*[@id="mw-content-text"]/div[1]/table[' + str(mk_rank) + ']/tbody/tr/td[2]/ul/li[' + str(
+                                    i) + ']/text()[2]')
+                            # print(''.join(damage_list))
+                            per_grade += '\t' + ''.join(damage_list) + '\n'
+                            if len(damage_list) == 0:
+                                micro_upgrade += per_grade
+                                break
+                    await message.reply(content=equip_name+'\n'+micro_upgrade)
+                elif response.status_code==202:
+                    await message.reply(content="网络故障")
+                elif response.status_code==404:
+                    await message.reply(content="装备名称输入错误，请输入装备的英文名，注意首字母大写")
+        except Exception:
+            await message.reply(content="机器人工作异常/频道拦截消息")
+
+
+        try:
             if message.content[0:29] == '<@!15425887405726406995> 近期在线':
 
                 df = pd.read_csv('onlinedata.csv', encoding='gbk')
